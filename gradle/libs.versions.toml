@@ -1,0 +1,11 @@
+[versions]
+junit-jupiter = "5.12.1"
+paper-api    = "1.21.4-R0.1-SNAPSHOT"
+reactor      = "3.6.10"
+reactor-test = "3.6.10"
+
+[libraries]
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter",        version.ref = "junit-jupiter" }
+paper-api     = { module = "io.papermc.paper:paper-api",             version.ref = "paper-api" }
+reactor-core  = { module = "io.projectreactor:reactor-core",         version.ref = "reactor" }
+reactor-test  = { module = "io.projectreactor:reactor-test",         version.ref = "reactor-test" }

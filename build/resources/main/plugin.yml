@@ -1,0 +1,7 @@
+name: NoblEvents
+version: 0.1.0
+main: app.simplexdev.noblevents.NoblEvents
+api-version: '1.21'
+description: Reactive Bukkit event bus — expose Bukkit events as Reactor Flux streams.
+authors:
+  - Paldiu

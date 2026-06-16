@@ -12,23 +12,22 @@ import reactor.core.publisher.Sinks;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class BukkitEventBus implements EventBus {
+public abstract class AbstractEventBus implements EventBus {
 
-    private final Plugin plugin;
+    protected final Plugin plugin;
+
     private final ConcurrentHashMap<Class<?>, Sinks.Many<?>> sinks = new ConcurrentHashMap<>();
     private final Set<Class<?>> registered = ConcurrentHashMap.newKeySet();
-
-    // Single dummy listener instance that holds all dynamic registrations.
     private final Listener handle = new Listener() {};
 
-    public BukkitEventBus(Plugin plugin) {
+    protected AbstractEventBus(Plugin plugin) {
         this.plugin = plugin;
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <E extends Event> Flux<E> of(Class<E> eventType) {
-        Sinks.Many<E> sink = (Sinks.Many<E>) sinks.computeIfAbsent(
+        final Sinks.Many<E> sink = (Sinks.Many<E>) sinks.computeIfAbsent(
             eventType,
             k -> Sinks.many().multicast().onBackpressureBuffer()
         );
@@ -40,7 +39,7 @@ public class BukkitEventBus implements EventBus {
                 EventPriority.MONITOR,
                 (l, e) -> {
                     if (eventType.isInstance(e)) {
-                        ((Sinks.Many<E>) sinks.get(eventType)).tryEmitNext(eventType.cast(e));
+                        emit(eventType, eventType.cast(e));
                     }
                 },
                 plugin,
@@ -49,6 +48,16 @@ public class BukkitEventBus implements EventBus {
         }
 
         return sink.asFlux();
+    }
+
+    /**
+     * Called on every matching Bukkit event before it reaches the sink.
+     * Subclasses override this to apply interception, filtering, or transformation.
+     * The default implementation emits directly.
+     */
+    @SuppressWarnings("unchecked")
+    protected <E extends Event> void emit(Class<E> eventType, E event) {
+        ((Sinks.Many<E>) sinks.get(eventType)).tryEmitNext(event);
     }
 
     @Override

@@ -9,6 +9,7 @@ import org.bukkit.plugin.Plugin;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,16 +28,18 @@ public abstract class AbstractEventBus implements EventBus {
     @Override
     @SuppressWarnings("unchecked")
     public <E extends Event> Flux<E> of(Class<E> eventType) {
+        Objects.requireNonNull(eventType, "eventType must not be null");
+
         final Sinks.Many<E> sink = (Sinks.Many<E>) sinks.computeIfAbsent(
             eventType,
-            k -> Sinks.many().multicast().onBackpressureBuffer()
+            k -> Sinks.many().multicast().onBackpressureBuffer(1024, false)
         );
 
         if (registered.add(eventType)) {
             plugin.getServer().getPluginManager().registerEvent(
                 eventType,
                 handle,
-                EventPriority.MONITOR,
+                EventPriority.NORMAL,
                 (l, e) -> {
                     if (eventType.isInstance(e)) {
                         emit(eventType, eventType.cast(e));
@@ -57,10 +60,16 @@ public abstract class AbstractEventBus implements EventBus {
      */
     @SuppressWarnings("unchecked")
     protected <E extends Event> void emit(Class<E> eventType, E event) {
-        ((Sinks.Many<E>) sinks.get(eventType)).tryEmitNext(event);
+        final Sinks.Many<?> raw = sinks.get(eventType);
+        if (raw == null) return; // sink already cleared after shutdown; drop silently
+        final Sinks.Many<E> sink = (Sinks.Many<E>) raw;
+        final Sinks.EmitResult result = sink.tryEmitNext(event);
+        if (result != Sinks.EmitResult.OK) {
+            plugin.getLogger().warning("[NoblEvents] emit dropped for "
+                + eventType.getSimpleName() + ": " + result);
+        }
     }
 
-    @Override
     public void shutdown() {
         sinks.values().forEach(s -> s.tryEmitComplete());
         HandlerList.unregisterAll(handle);

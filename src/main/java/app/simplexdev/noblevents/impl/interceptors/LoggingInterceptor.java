@@ -17,6 +17,6 @@ public final class LoggingInterceptor implements EventInterceptor {
 
     @Override
     public void intercept(InterceptorContext<?> context) {
-        logger.finest(() -> "[NoblEvents] dispatch: " + context.event().getEventName());
+        logger.fine(() -> "[NoblEvents] dispatch: " + context.event().getEventName());
     }
 }

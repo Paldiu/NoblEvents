@@ -9,12 +9,17 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
  * Fluent pipeline builder for a single Bukkit event type. Wraps a {@link Flux} and exposes
  * domain-specific operators so callers never need to import Reactor directly for common cases.
+ *
+ * <p>Each operator returns a <em>new</em> {@code EventStream}; the original is unmodified and
+ * can be safely shared across threads or reused as a base for multiple pipelines.
  *
  * <p>Obtain an instance via {@link NoblEvents#events(Class)}.
  *
@@ -33,7 +38,7 @@ public final class EventStream<E extends Event> {
 
     private final Class<E> eventType;
     private final Plugin plugin;
-    private Flux<E> flux;
+    private final Flux<E> flux;
 
     EventStream(Class<E> eventType, Flux<E> flux, Plugin plugin) {
         this.eventType = eventType;
@@ -46,17 +51,15 @@ public final class EventStream<E extends Event> {
     // -------------------------------------------------------------------------
 
     public EventStream<E> filter(Predicate<? super E> predicate) {
-        flux = flux.filter(predicate);
-        return this;
+        return new EventStream<>(eventType, flux.filter(predicate), plugin);
     }
 
     /** Ignores events where {@link org.bukkit.event.Cancellable#isCancelled()} is true. */
     public EventStream<E> ignoreCancelled() {
-        flux = flux.filter(e -> {
+        return new EventStream<>(eventType, flux.filter(e -> {
             if (e instanceof org.bukkit.event.Cancellable c) return !c.isCancelled();
             return true;
-        });
-        return this;
+        }), plugin);
     }
 
     // -------------------------------------------------------------------------
@@ -68,8 +71,7 @@ public final class EventStream<E extends Event> {
      * Suppresses burst spam — only the last event in a rapid burst is emitted.
      */
     public EventStream<E> debounce(Duration delay) {
-        flux = flux.sampleTimeout(e -> Mono.delay(delay));
-        return this;
+        return new EventStream<>(eventType, flux.sampleTimeout(e -> Mono.delay(delay)), plugin);
     }
 
     /**
@@ -77,18 +79,16 @@ public final class EventStream<E extends Event> {
      * Useful when you want periodic snapshots rather than every event.
      */
     public EventStream<E> throttle(Duration period) {
-        flux = flux.sample(period);
-        return this;
+        return new EventStream<>(eventType, flux.sample(period), plugin);
     }
 
     // -------------------------------------------------------------------------
-    // Quantity
+    // Quantity and time bounds
     // -------------------------------------------------------------------------
 
     /** Auto-cancels the subscription after {@code count} events. */
     public EventStream<E> limit(long count) {
-        flux = flux.take(count);
-        return this;
+        return new EventStream<>(eventType, flux.take(count), plugin);
     }
 
     /** Convenience for {@code limit(1)} — subscribe to the very next occurrence. */
@@ -96,31 +96,63 @@ public final class EventStream<E extends Event> {
         return limit(1);
     }
 
+    /**
+     * Terminates the stream with an error if no event arrives within {@code timeout}.
+     * Pair with the three-arg {@code subscribe} overload to handle the timeout case.
+     */
+    public EventStream<E> timeout(Duration timeout) {
+        return new EventStream<>(eventType, flux.timeout(timeout), plugin);
+    }
+
+    // -------------------------------------------------------------------------
+    // Transformation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Maps each event to another Event type. For non-Event transformations
+     * (e.g. extracting a {@code Player} from a {@code PlayerMoveEvent}), use
+     * {@link #flux()}{@code .map(...)} instead.
+     */
+    public <R extends Event> EventStream<R> map(Function<? super E, ? extends R> mapper, Class<R> resultType) {
+        return new EventStream<>(resultType, flux.map(mapper), plugin);
+    }
+
     // -------------------------------------------------------------------------
     // Thread routing
     // -------------------------------------------------------------------------
 
-    /** Delivers events on Bukkit's main server thread. Safe for all Bukkit API calls. */
+    /**
+     * Delivers events on Bukkit's main server thread. Safe for all Bukkit API calls.
+     * Note: Bukkit events already arrive on the main thread; only use this after
+     * {@link #onAsync()} to switch back, or when an intermediate operator may shift threads.
+     */
     public EventStream<E> onMainThread() {
-        flux = flux.publishOn(BukkitSchedulers.mainThread(plugin));
-        return this;
+        return new EventStream<>(eventType, flux.publishOn(BukkitSchedulers.mainThread(plugin)), plugin);
     }
 
     /** Delivers events on Bukkit's async thread pool. Do not call Bukkit API here. */
     public EventStream<E> onAsync() {
-        flux = flux.publishOn(BukkitSchedulers.async(plugin));
-        return this;
+        return new EventStream<>(eventType, flux.publishOn(BukkitSchedulers.async(plugin)), plugin);
     }
 
     // -------------------------------------------------------------------------
     // Terminal — subscribe
     // -------------------------------------------------------------------------
 
+    /**
+     * Subscribes to events, logging any uncaught subscriber errors to the plugin logger
+     * rather than letting them propagate into Reactor's global error hook.
+     */
     public EventSubscription subscribe(Consumer<? super E> onEvent) {
-        return new SimpleEventSubscription(flux.subscribe(onEvent), eventType);
+        Objects.requireNonNull(onEvent, "onEvent must not be null");
+        return subscribe(onEvent, err ->
+            plugin.getLogger().severe("[NoblEvents] Unhandled error in subscriber for "
+                + eventType.getSimpleName() + ": " + err.getMessage()));
     }
 
     public EventSubscription subscribe(Consumer<? super E> onEvent, Consumer<Throwable> onError) {
+        Objects.requireNonNull(onEvent, "onEvent must not be null");
+        Objects.requireNonNull(onError, "onError must not be null");
         return new SimpleEventSubscription(flux.subscribe(onEvent, onError), eventType);
     }
 
@@ -128,6 +160,9 @@ public final class EventStream<E extends Event> {
             Consumer<? super E> onEvent,
             Consumer<Throwable> onError,
             Runnable onComplete) {
+        Objects.requireNonNull(onEvent, "onEvent must not be null");
+        Objects.requireNonNull(onError, "onError must not be null");
+        Objects.requireNonNull(onComplete, "onComplete must not be null");
         return new SimpleEventSubscription(flux.subscribe(onEvent, onError, onComplete), eventType);
     }
 

@@ -10,6 +10,4 @@ public interface EventBus {
      * The underlying Bukkit listener is registered lazily on the first subscriber.
      */
     <E extends Event> Flux<E> of(Class<E> eventType);
-
-    void shutdown();
 }

@@ -49,8 +49,9 @@ tasks.named('processResources') {
 
 tasks.named('shadowJar') {
     archiveClassifier.set('')
-    relocate 'reactor', 'app.simplexdev.noblevents.libs.reactor'
-    relocate 'org.reactivestreams', 'app.simplexdev.noblevents.libs.reactivestreams'
+    // relocate 'reactor', 'app.simplexdev.noblevents.libs.reactor'
+    // Shadow's bundled ASM (9.0.0-beta13) rejects Java 25 class files (major version 69)
+    // during relocation. Re-enable once the plugin ships ASM 9.8+.
 }
 
 tasks.named('build') {

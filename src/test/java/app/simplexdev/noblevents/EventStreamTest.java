@@ -10,11 +10,6 @@ import reactor.test.StepVerifier;
 import static org.junit.jupiter.api.Assertions.*;
 
 class EventStreamTest {
-
-    // -------------------------------------------------------------------------
-    // Minimal test events — no server required
-    // -------------------------------------------------------------------------
-
     static class SimpleEvent extends Event {
         private static final HandlerList HANDLERS = new HandlerList();
         private final String tag;
@@ -40,10 +35,6 @@ class EventStreamTest {
     private static EventStream<SimpleEvent> stream(Sinks.Many<SimpleEvent> sink) {
         return new EventStream<>(SimpleEvent.class, sink.asFlux(), null);
     }
-
-    // -------------------------------------------------------------------------
-    // Filtering
-    // -------------------------------------------------------------------------
 
     @Test
     void filter_passes_only_matching_events() {
@@ -81,10 +72,6 @@ class EventStreamTest {
             .verifyComplete();
     }
 
-    // -------------------------------------------------------------------------
-    // Quantity
-    // -------------------------------------------------------------------------
-
     @Test
     void limit_auto_cancels_after_count() {
         Sinks.Many<SimpleEvent> sink = Sinks.many().multicast().onBackpressureBuffer();
@@ -93,7 +80,7 @@ class EventStreamTest {
             .then(() -> {
                 sink.tryEmitNext(new SimpleEvent("a"));
                 sink.tryEmitNext(new SimpleEvent("b"));
-                sink.tryEmitNext(new SimpleEvent("c")); // beyond limit
+                sink.tryEmitNext(new SimpleEvent("c"));
             })
             .expectNextCount(2)
             .verifyComplete();
@@ -112,10 +99,6 @@ class EventStreamTest {
             .verifyComplete();
     }
 
-    // -------------------------------------------------------------------------
-    // Immutability
-    // -------------------------------------------------------------------------
-
     @Test
     void operators_return_new_instance_leaving_original_unchanged() {
         Sinks.Many<SimpleEvent> sink = Sinks.many().multicast().onBackpressureBuffer();
@@ -124,7 +107,6 @@ class EventStreamTest {
 
         assertNotSame(original, filtered);
 
-        // Original still sees all events; filtered sees none
         StepVerifier.create(original.flux())
             .then(() -> {
                 sink.tryEmitNext(new SimpleEvent("x"));
@@ -133,10 +115,6 @@ class EventStreamTest {
             .expectNextCount(1)
             .verifyComplete();
     }
-
-    // -------------------------------------------------------------------------
-    // Null safety
-    // -------------------------------------------------------------------------
 
     @Test
     void subscribe_null_consumer_throws_NPE() {
@@ -151,10 +129,6 @@ class EventStreamTest {
         EventStream<SimpleEvent> stream = stream(sink);
         assertThrows(NullPointerException.class, () -> stream.subscribe(e -> {}, null));
     }
-
-    // -------------------------------------------------------------------------
-    // map()
-    // -------------------------------------------------------------------------
 
     static class WrappedEvent extends Event {
         private static final HandlerList HANDLERS = new HandlerList();

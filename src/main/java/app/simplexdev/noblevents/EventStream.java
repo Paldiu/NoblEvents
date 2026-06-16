@@ -46,10 +46,6 @@ public final class EventStream<E extends Event> {
         this.plugin = plugin;
     }
 
-    // -------------------------------------------------------------------------
-    // Filtering
-    // -------------------------------------------------------------------------
-
     public EventStream<E> filter(Predicate<? super E> predicate) {
         return new EventStream<>(eventType, flux.filter(predicate), plugin);
     }
@@ -61,10 +57,6 @@ public final class EventStream<E extends Event> {
             return true;
         }), plugin);
     }
-
-    // -------------------------------------------------------------------------
-    // Rate control
-    // -------------------------------------------------------------------------
 
     /**
      * True debounce: only emits an event after {@code delay} of silence.
@@ -81,10 +73,6 @@ public final class EventStream<E extends Event> {
     public EventStream<E> throttle(Duration period) {
         return new EventStream<>(eventType, flux.sample(period), plugin);
     }
-
-    // -------------------------------------------------------------------------
-    // Quantity and time bounds
-    // -------------------------------------------------------------------------
 
     /** Auto-cancels the subscription after {@code count} events. */
     public EventStream<E> limit(long count) {
@@ -104,10 +92,6 @@ public final class EventStream<E extends Event> {
         return new EventStream<>(eventType, flux.timeout(timeout), plugin);
     }
 
-    // -------------------------------------------------------------------------
-    // Transformation
-    // -------------------------------------------------------------------------
-
     /**
      * Maps each event to another Event type. For non-Event transformations
      * (e.g. extracting a {@code Player} from a {@code PlayerMoveEvent}), use
@@ -116,10 +100,6 @@ public final class EventStream<E extends Event> {
     public <R extends Event> EventStream<R> map(Function<? super E, ? extends R> mapper, Class<R> resultType) {
         return new EventStream<>(resultType, flux.map(mapper), plugin);
     }
-
-    // -------------------------------------------------------------------------
-    // Thread routing
-    // -------------------------------------------------------------------------
 
     /**
      * Delivers events on Bukkit's main server thread. Safe for all Bukkit API calls.
@@ -134,10 +114,6 @@ public final class EventStream<E extends Event> {
     public EventStream<E> onAsync() {
         return new EventStream<>(eventType, flux.publishOn(BukkitSchedulers.async(plugin)), plugin);
     }
-
-    // -------------------------------------------------------------------------
-    // Terminal — subscribe
-    // -------------------------------------------------------------------------
 
     /**
      * Subscribes to events, logging any uncaught subscriber errors to the plugin logger
@@ -165,10 +141,6 @@ public final class EventStream<E extends Event> {
         Objects.requireNonNull(onComplete, "onComplete must not be null");
         return new SimpleEventSubscription(flux.subscribe(onEvent, onError, onComplete), eventType);
     }
-
-    // -------------------------------------------------------------------------
-    // Escape hatch
-    // -------------------------------------------------------------------------
 
     /**
      * Returns the underlying {@link Flux} for operators not exposed by this builder —

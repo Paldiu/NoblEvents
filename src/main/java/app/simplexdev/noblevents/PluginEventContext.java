@@ -21,15 +21,12 @@ import java.util.function.Predicate;
  * <p>Obtain an instance via {@link NoblEvents#forPlugin(Plugin)}.
  *
  * <pre>{@code
- * // In your plugin's onEnable():
  * PluginEventContext ctx = NoblEvents.forPlugin(this);
  *
  * ctx.events(PlayerMoveEvent.class)
  *     .filter(e -> e.getPlayer().getHealth() < 5)
  *     .onMainThread()
  *     .subscribe(e -> sendWarning(e.getPlayer()));
- *
- * // All subscriptions are cancelled automatically when this plugin disables.
  * }</pre>
  */
 public final class PluginEventContext {
@@ -67,8 +64,6 @@ public final class PluginEventContext {
         managed.add(sub);
         return sub;
     }
-
-    // -------------------------------------------------------------------------
 
     /**
      * Fluent pipeline builder that mirrors {@link EventStream}'s API but registers

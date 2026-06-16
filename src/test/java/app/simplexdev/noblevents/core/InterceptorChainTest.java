@@ -13,11 +13,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 class InterceptorChainTest {
-
-    // -------------------------------------------------------------------------
-    // Minimal test events
-    // -------------------------------------------------------------------------
-
     static class Alpha extends Event {
         private static final HandlerList HANDLERS = new HandlerList();
         @Override public HandlerList getHandlers() { return HANDLERS; }
@@ -29,10 +24,6 @@ class InterceptorChainTest {
         @Override public HandlerList getHandlers() { return HANDLERS; }
         public static HandlerList getHandlerList() { return HANDLERS; }
     }
-
-    // -------------------------------------------------------------------------
-    // Ordering
-    // -------------------------------------------------------------------------
 
     @Test
     void interceptors_run_in_ascending_priority_order() {
@@ -54,7 +45,6 @@ class InterceptorChainTest {
         }
 
         InterceptorChain chain = new InterceptorChain();
-        // Register out of order to confirm sorting
         chain.register(new Third());
         chain.register(new First());
         chain.register(new Second());
@@ -73,7 +63,6 @@ class InterceptorChainTest {
             @Override public void intercept(InterceptorContext<?> ctx) { order.add(1); }
         }
 
-        // No @Intercepts — priority defaults to 0
         EventInterceptor middle = ctx -> order.add(2);
 
         @Intercepts(priority = 5)
@@ -91,17 +80,13 @@ class InterceptorChainTest {
         assertEquals(List.of(1, 2, 3), order);
     }
 
-    // -------------------------------------------------------------------------
-    // Cancellation
-    // -------------------------------------------------------------------------
-
     @Test
     void cancel_stops_remaining_interceptors() {
         List<String> ran = new ArrayList<>();
 
         InterceptorChain chain = new InterceptorChain();
         chain.register(ctx -> { ran.add("first"); ctx.cancel(); });
-        chain.register(ctx -> ran.add("second")); // must not run
+        chain.register(ctx -> ran.add("second")); 
 
         InterceptorContext<?> result = chain.process(new Alpha());
 
@@ -119,10 +104,6 @@ class InterceptorChainTest {
         assertFalse(result.isCancelled());
     }
 
-    // -------------------------------------------------------------------------
-    // @Intercepts event-type filter
-    // -------------------------------------------------------------------------
-
     @Test
     void intercepts_value_restricts_to_matching_event_type() {
         List<String> ran = new ArrayList<>();
@@ -135,10 +116,10 @@ class InterceptorChainTest {
         InterceptorChain chain = new InterceptorChain();
         chain.register(new AlphaOnly());
 
-        chain.process(new Beta());   // should not trigger
+        chain.process(new Beta());
         assertTrue(ran.isEmpty());
 
-        chain.process(new Alpha());  // should trigger
+        chain.process(new Alpha());
         assertEquals(List.of("ran"), ran);
     }
 
@@ -146,7 +127,7 @@ class InterceptorChainTest {
     void empty_intercepts_value_matches_all_event_types() {
         List<String> ran = new ArrayList<>();
 
-        @Intercepts // value = {} by default
+        @Intercepts
         class All implements EventInterceptor {
             @Override public void intercept(InterceptorContext<?> ctx) { ran.add("ran"); }
         }
@@ -159,10 +140,6 @@ class InterceptorChainTest {
 
         assertEquals(List.of("ran", "ran"), ran);
     }
-
-    // -------------------------------------------------------------------------
-    // Registration / unregistration
-    // -------------------------------------------------------------------------
 
     @Test
     void unregister_removes_interceptor_from_chain() {

@@ -47,10 +47,6 @@ public final class NoblEvents extends JavaPlugin {
         getLogger().info("NoblEvents disabled.");
     }
 
-    // -------------------------------------------------------------------------
-    // Static API — primary user-facing surface
-    // -------------------------------------------------------------------------
-
     /**
      * Returns a fluent {@link EventStream} for the given Bukkit event type.
      *
@@ -107,10 +103,6 @@ public final class NoblEvents extends JavaPlugin {
         instance.chain.unregister(interceptor);
     }
 
-    // -------------------------------------------------------------------------
-    // Advanced — direct bus access
-    // -------------------------------------------------------------------------
-
     /**
      * Returns the raw {@link EventBus} for callers that want to compose their own
      * pipelines without going through {@link EventStream}.
@@ -125,10 +117,6 @@ public final class NoblEvents extends JavaPlugin {
     public static NoblEvents getInstance() {
         return instance;
     }
-
-    // -------------------------------------------------------------------------
-    // Internal
-    // -------------------------------------------------------------------------
 
     static void requireEnabled() {
         if (instance == null || instance.eventBus == null) {

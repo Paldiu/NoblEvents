@@ -61,7 +61,7 @@ public abstract class AbstractEventBus implements EventBus {
     @SuppressWarnings("unchecked")
     protected <E extends Event> void emit(Class<E> eventType, E event) {
         final Sinks.Many<?> raw = sinks.get(eventType);
-        if (raw == null) return; // sink already cleared after shutdown; drop silently
+        if (raw == null) return; 
         final Sinks.Many<E> sink = (Sinks.Many<E>) raw;
         final Sinks.EmitResult result = sink.tryEmitNext(event);
         if (result != Sinks.EmitResult.OK) {

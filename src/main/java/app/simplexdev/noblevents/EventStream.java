@@ -149,4 +149,8 @@ public final class EventStream<E extends Event> {
     public Flux<E> flux() {
         return flux;
     }
+
+    Class<E> eventType() {
+        return eventType;
+    }
 }

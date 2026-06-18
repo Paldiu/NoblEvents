@@ -8,6 +8,7 @@ import app.simplexdev.noblevents.impl.BukkitEventBus;
 import app.simplexdev.noblevents.impl.interceptors.LoggingInterceptor;
 import app.simplexdev.noblevents.scheduler.BukkitSchedulers;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.event.Event;
@@ -21,17 +22,18 @@ public final class NoblEvents extends JavaPlugin {
 
     private static NoblEvents instance;
 
-    private final InterceptorChain chain = new InterceptorChain();
+    private InterceptorChain chain;
     private final ConcurrentHashMap<Plugin, PluginEventContext> contexts = new ConcurrentHashMap<>();
     private InterceptorAwareEventBus eventBus;
 
     @Override
     public void onEnable() {
         instance = this;
-        chain.register(new LoggingInterceptor(getLogger()));
+        chain = new InterceptorChain(getSLF4JLogger());
+        chain.register(new LoggingInterceptor(getSLF4JLogger()));
         eventBus = new InterceptorAwareEventBus(new BukkitEventBus(this), chain);
         getServer().getPluginManager().registerEvents(new PluginLifecycleListener(), this);
-        getLogger().info("NoblEvents enabled.");
+        getSLF4JLogger().info("NoblEvents enabled.");
     }
 
     @Override
@@ -44,11 +46,12 @@ public final class NoblEvents extends JavaPlugin {
         }
         BukkitSchedulers.dispose(this);
         instance = null;
-        getLogger().info("NoblEvents disabled.");
+        getSLF4JLogger().info("NoblEvents disabled.");
     }
 
     /**
-     * Returns a fluent {@link EventStream} for the given Bukkit event type.
+     * Returns a fluent {@link EventStream} for the given Bukkit event type at
+     * {@link EventPriority#NORMAL} priority.
      *
      * <pre>{@code
      * NoblEvents.events(PlayerMoveEvent.class)
@@ -66,13 +69,23 @@ public final class NoblEvents extends JavaPlugin {
     }
 
     /**
+     * Returns a fluent {@link EventStream} for the given event type at the specified
+     * Bukkit listener {@code priority}. When {@code ignoreCancelled} is {@code true},
+     * events already cancelled by higher-priority listeners are suppressed from the stream.
+     *
+     * @throws IllegalStateException if NoblEvents is not enabled
+     */
+    public static <E extends Event> EventStream<E> events(Class<E> eventType,
+                                                          EventPriority priority,
+                                                          boolean ignoreCancelled) {
+        requireEnabled();
+        return new EventStream<>(eventType,
+            instance.eventBus.of(eventType, priority, ignoreCancelled), instance);
+    }
+
+    /**
      * Returns a {@link PluginEventContext} bound to the given plugin. All subscriptions
      * created through the context are automatically cancelled when that plugin disables.
-     *
-     * <pre>{@code
-     * PluginEventContext ctx = NoblEvents.forPlugin(this);
-     * ctx.events(PlayerMoveEvent.class).onMainThread().subscribe(e -> { ... });
-     * }</pre>
      *
      * @throws IllegalStateException if NoblEvents is not enabled
      */
@@ -87,6 +100,9 @@ public final class NoblEvents extends JavaPlugin {
      * Interceptors run before every event reaches subscribers. Use
      * {@link app.simplexdev.noblevents.api.interceptor.Intercepts @Intercepts} to
      * restrict which event types it handles and to control ordering.
+     *
+     * <p><b>Trust boundary:</b> this is a public static method — any plugin can register
+     * a global interceptor that sees and can cancel events for all other plugins.
      *
      * @throws IllegalStateException if NoblEvents is not enabled
      */

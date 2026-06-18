@@ -9,28 +9,31 @@ import reactor.core.scheduler.Scheduler;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * A Reactor {@link Scheduler} backed by Bukkit's task scheduler.
+ * A Reactor {@link Scheduler} that dispatches every task onto Bukkit's main server thread.
  *
- * <p>Unlike a {@code Schedulers.fromExecutor()} wrapper, each submitted task returns a
- * {@link Disposable} that cancels the underlying {@link BukkitTask}. Workers set a disposed
- * flag checked inside the task body so that tasks already queued but not yet executed are
- * skipped after the worker (i.e. the downstream subscription) is cancelled.
+ * <p>Each submitted task returns a {@link Disposable} that cancels the underlying
+ * {@link BukkitTask}. Workers set a disposed flag so that tasks already queued but not yet
+ * executed are skipped after the worker is cancelled.
+ *
+ * <p><b>Timed operators ({@code debounce}, {@code throttle}, {@code timeout}, etc.) must not
+ * be chained onto this scheduler</b> — the main-thread scheduler does not implement
+ * {@code schedule(task, delay, unit)}, and those operators require a time-capable scheduler
+ * (Reactor's default {@code Schedulers.parallel()} is used automatically when no explicit
+ * scheduler is provided).
  */
 final class BukkitScheduler implements Scheduler {
 
     private final Plugin plugin;
-    private final boolean async;
     private final AtomicBoolean disposed = new AtomicBoolean(false);
 
-    BukkitScheduler(Plugin plugin, boolean async) {
+    BukkitScheduler(Plugin plugin) {
         this.plugin = plugin;
-        this.async = async;
     }
 
     @Override
     public Disposable schedule(Runnable task) {
         if (disposed.get()) return Disposables.disposed();
-        final BukkitTask bt = submit(task);
+        final BukkitTask bt = plugin.getServer().getScheduler().runTask(plugin, task);
         return bt::cancel;
     }
 
@@ -49,12 +52,6 @@ final class BukkitScheduler implements Scheduler {
         return disposed.get();
     }
 
-    private BukkitTask submit(Runnable command) {
-        return async
-            ? plugin.getServer().getScheduler().runTaskAsynchronously(plugin, command)
-            : plugin.getServer().getScheduler().runTask(plugin, command);
-    }
-
     private final class BukkitWorker implements Worker {
 
         private final AtomicBoolean workerDisposed = new AtomicBoolean(false);
@@ -62,7 +59,7 @@ final class BukkitScheduler implements Scheduler {
         @Override
         public Disposable schedule(Runnable task) {
             if (workerDisposed.get() || disposed.get()) return Disposables.disposed();
-            final BukkitTask bt = submit(() -> {
+            final BukkitTask bt = plugin.getServer().getScheduler().runTask(plugin, () -> {
                 if (!workerDisposed.get() && !disposed.get()) {
                     task.run();
                 }

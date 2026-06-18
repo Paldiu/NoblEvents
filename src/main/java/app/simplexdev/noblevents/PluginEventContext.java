@@ -1,12 +1,16 @@
 package app.simplexdev.noblevents;
 
 import app.simplexdev.noblevents.api.EventSubscription;
+import app.simplexdev.noblevents.impl.SimpleEventSubscription;
 import org.bukkit.event.Event;
+import org.bukkit.event.EventPriority;
 import org.bukkit.plugin.Plugin;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -16,7 +20,8 @@ import java.util.function.Predicate;
  * A plugin-scoped event subscription manager. Every subscription created through a
  * {@link BoundStream} returned by {@link #events} is tracked here and automatically
  * cancelled when the owning plugin disables (or when {@link #cancelAll()} is called
- * explicitly).
+ * explicitly). Subscriptions that complete naturally (e.g. {@code once()}, {@code limit()})
+ * remove themselves from tracking via {@code doFinally}, so the managed list stays lean.
  *
  * <p>Obtain an instance via {@link NoblEvents#forPlugin(Plugin)}.
  *
@@ -39,12 +44,21 @@ public final class PluginEventContext {
     }
 
     /**
-     * Returns a fluent stream builder for the given event type. Subscriptions
-     * created via the returned {@link BoundStream} are tracked by this context.
+     * Returns a fluent stream builder for the given event type at {@link EventPriority#NORMAL}.
+     * Subscriptions created via the returned {@link BoundStream} are tracked by this context.
      */
     public <E extends Event> BoundStream<E> events(Class<E> eventType) {
         NoblEvents.requireEnabled();
         return new BoundStream<>(NoblEvents.events(eventType));
+    }
+
+    /**
+     * Returns a fluent stream builder for the given event type at the specified priority.
+     * Subscriptions created via the returned {@link BoundStream} are tracked by this context.
+     */
+    public <E extends Event> BoundStream<E> events(Class<E> eventType, EventPriority priority, boolean ignoreCancelled) {
+        NoblEvents.requireEnabled();
+        return new BoundStream<>(NoblEvents.events(eventType, priority, ignoreCancelled));
     }
 
     /**
@@ -60,14 +74,10 @@ public final class PluginEventContext {
         return owner;
     }
 
-    private EventSubscription track(EventSubscription sub) {
-        managed.add(sub);
-        return sub;
-    }
-
     /**
      * Fluent pipeline builder that mirrors {@link EventStream}'s API but registers
-     * every subscription with the enclosing {@link PluginEventContext}.
+     * every subscription with the enclosing {@link PluginEventContext} and removes
+     * completed subscriptions automatically via {@code doFinally}.
      */
     public final class BoundStream<E extends Event> {
 
@@ -119,23 +129,60 @@ public final class PluginEventContext {
         }
 
         public EventSubscription subscribe(Consumer<? super E> onEvent) {
-            return track(inner.subscribe(onEvent));
+            Objects.requireNonNull(onEvent, "onEvent must not be null");
+            return trackWithRemoval(inner.flux(), onEvent,
+                err -> owner.getSLF4JLogger().error("[NoblEvents] Unhandled error in subscriber for {}: {}",
+                    inner.eventType().getSimpleName(), err.getMessage()),
+                null);
         }
 
         public EventSubscription subscribe(Consumer<? super E> onEvent,
                                            Consumer<Throwable> onError) {
-            return track(inner.subscribe(onEvent, onError));
+            Objects.requireNonNull(onEvent, "onEvent must not be null");
+            Objects.requireNonNull(onError, "onError must not be null");
+            return trackWithRemoval(inner.flux(), onEvent, onError, null);
         }
 
         public EventSubscription subscribe(Consumer<? super E> onEvent,
                                            Consumer<Throwable> onError,
                                            Runnable onComplete) {
-            return track(inner.subscribe(onEvent, onError, onComplete));
+            Objects.requireNonNull(onEvent, "onEvent must not be null");
+            Objects.requireNonNull(onError, "onError must not be null");
+            Objects.requireNonNull(onComplete, "onComplete must not be null");
+            return trackWithRemoval(inner.flux(), onEvent, onError, onComplete);
         }
 
         /** Escape hatch: returns the underlying {@link Flux} without tracking. */
         public Flux<E> flux() {
             return inner.flux();
+        }
+
+        /**
+         * Subscribes to the flux with a {@code doFinally} hook that removes the subscription
+         * from {@code managed} once it terminates (complete, error, or cancel). The
+         * {@code ref[]} indirection is safe because the hot multicast source never signals
+         * synchronously during subscribe, so {@code ref[0]} is always set before doFinally fires.
+         */
+        private EventSubscription trackWithRemoval(
+                Flux<E> flux,
+                Consumer<? super E> onEvent,
+                Consumer<Throwable> onError,
+                Runnable onComplete) {
+
+            final EventSubscription[] ref = new EventSubscription[1];
+
+            final Flux<E> withRemoval = flux.doFinally(signal -> {
+                if (ref[0] != null) managed.remove(ref[0]);
+            });
+
+            final Disposable d = onComplete != null
+                ? withRemoval.subscribe(onEvent, onError, onComplete)
+                : withRemoval.subscribe(onEvent, onError);
+
+            final EventSubscription sub = new SimpleEventSubscription(d, inner.eventType());
+            ref[0] = sub;
+            managed.add(sub);
+            return sub;
         }
     }
 }

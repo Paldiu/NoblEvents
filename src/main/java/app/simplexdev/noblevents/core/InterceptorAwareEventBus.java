@@ -1,6 +1,7 @@
 package app.simplexdev.noblevents.core;
 
 import org.bukkit.event.Event;
+import org.bukkit.event.EventPriority;
 import reactor.core.publisher.Flux;
 
 /**
@@ -22,6 +23,12 @@ public final class InterceptorAwareEventBus implements app.simplexdev.noblevents
     @Override
     public <E extends Event> Flux<E> of(Class<E> eventType) {
         return delegate.of(eventType)
+            .filter(e -> !chain.process(e).isCancelled());
+    }
+
+    @Override
+    public <E extends Event> Flux<E> of(Class<E> eventType, EventPriority priority, boolean ignoreCancelled) {
+        return delegate.of(eventType, priority, ignoreCancelled)
             .filter(e -> !chain.process(e).isCancelled());
     }
 

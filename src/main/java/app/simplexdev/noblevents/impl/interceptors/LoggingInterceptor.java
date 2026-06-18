@@ -4,9 +4,9 @@ import app.simplexdev.noblevents.api.interceptor.EventInterceptor;
 import app.simplexdev.noblevents.api.interceptor.InterceptorContext;
 import app.simplexdev.noblevents.api.interceptor.Intercepts;
 
-import java.util.logging.Logger;
+import org.slf4j.Logger;
 
-@Intercepts(priority = Integer.MIN_VALUE)
+@Intercepts(priority = Integer.MAX_VALUE)
 public final class LoggingInterceptor implements EventInterceptor {
 
     private final Logger logger;
@@ -17,6 +17,6 @@ public final class LoggingInterceptor implements EventInterceptor {
 
     @Override
     public void intercept(InterceptorContext<?> context) {
-        logger.fine(() -> "[NoblEvents] dispatch: " + context.event().getEventName());
+        logger.debug("[NoblEvents] dispatch: {}", context.event().getEventName());
     }
 }

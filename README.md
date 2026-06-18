@@ -16,12 +16,12 @@ management is needed on the server.
 
 **Gradle (Kotlin DSL)**
 ```kotlin
-implementation("app.simplexdev:noblevents:0.1.0")
+implementation("app.simplexdev:noblevents:0.2.0")
 ```
 
 **Gradle (Groovy DSL)**
 ```groovy
-implementation 'app.simplexdev:noblevents:0.1.0'
+implementation 'app.simplexdev:noblevents:0.2.0'
 ```
 
 Repository:
